@@ -1,3 +1,23 @@
+# OpenCV
+
+### 环境配置
+
+##### mac
+
+```
+pip install opencv-python 
+pip install opencv-contrib-python
+```
+
+##### windows
+
+```
+pip install opencv-python==4.2.0.34 -i http://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+pip install opencv-contrib-python==4.2.0.34 -i http://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+```
+
+<br>
+
 ### 回收资源
 
 ```python
@@ -82,7 +102,7 @@ cv.circle(img, (x, y), 50, (0, 255, 255), thickness=2)
 
 <br>
 
-### 人脸检测
+### faceCapture
 
 ##### 预处理
 
@@ -136,7 +156,7 @@ def face_detect_rec(img):
 
 <br>
 
-### 人脸检测—视频
+### faceCapture for vedio
 
 ```python
 # 读取视频
@@ -164,7 +184,7 @@ def face_detect_rec(img):
 
 <br>
 
-### 人脸识别
+### faceDetect
 
 #### 训练
 
@@ -264,3 +284,287 @@ for face in faces:
     print('这是第%d个人，置信度为%f' % (id, confident))
 ```
 
+<br>
+
+### Camera
+
+使用摄像头进行拍照
+
+```python
+# 打开摄像头
+def camera():
+    nums = 0
+    # 参数为0时表示打开内置摄像头
+    cap = cv.VideoCapture(0)
+
+    while True:
+        # 因为打开的是摄像头所以第一个参数永远为True
+        _, img = cap.read()
+        # 因为摄像头是镜像所以需要反转画面
+        img = cv.flip(img, 1)
+        cv.imshow('Image', img)
+        key = cv.waitKey(1)
+        # 键盘输入q时退出
+        if key == ord('q'):
+            break
+        # 键盘输入s时保存图片
+        elif key == ord('s'):
+            nums += 1
+            cv.imwrite('./data/myHand_%d.jpg' % nums, img)
+
+    cap.release()
+    cv.destroyAllWindows()
+```
+
+<br>
+
+### handDetect
+
+#### 配置环境
+
+##### mac
+
+```
+pip install mediapipe
+pip install protobuf
+```
+
+##### windows
+
+```
+pip install protobuf==3.19.6 -i http://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+pip install mediapipe -i http://pypi.tuna.tsinghua.edu.cn/simple --trusted-host pypi.tuna.tsinghua.edu.cn
+```
+
+#### Detector
+
+绘制手势+手势数据获取
+
+注意我们的每个手指有21个关节，我们使用这个类获取每个关节的位置，根据这个位置判断手势
+
+<img src="./assets/landmarkes.png" style="zoom:50%;" />
+
+创建一个类使用`mediapipe`提供的接口
+
+```python
+import cv2 as cv
+import mediapipe as mp
+
+
+class HandDetector:
+    # 初始化
+    def __init__(self, mode=False, max_hands=2, complexity=1, detection_con=0.5, track_con=0.5):
+        '''
+        手势识别类初始化
+
+        注意版本差异：
+        低版本中参数为四个，分别是：
+        :param mode: 是否为静态图片，默认False
+        :param max_hands: 最多识别多少个手
+        :param detection_confidence: 最小检测信度值，默认0.5
+        :param track_confidence: 最小追踪信度值，默认0.5
+
+        高版本中参数为五个，多了一个模型复杂度：
+        static_image_mode
+        max_num_hands
+        model_complexity=新增！只有两个值0或1可选
+        min_detection_confidence
+        min_tracking_confidence
+        '''
+        self.mode = mode
+        self.max_hands = max_hands
+        self.complexity = complexity
+        self.detection_con = detection_con
+        self.track_con = track_con
+        self.hands = mp.solutions.hands.Hands(mode, max_hands, complexity, detection_con, track_con)
+
+    def find_hands(self, img):
+        '''
+        绘制手势
+        :param img: 图片
+        :return: 绘画了手势的图片
+        '''
+        # 传入的是bgr，改成rgb
+        imgRGB = cv.cvtColor(img, cv.COLOR_BGR2RGB)
+        # 检测手势
+        self.results = self.hands.process(imgRGB)
+        # 判断是否有手
+        if self.results.multi_hand_landmarks:
+            # 遍历每只手
+            for handlms in self.results.multi_hand_landmarks:
+                '''
+                绘制手势
+                参数1：image
+                参数2：landmark_list 手势列表
+                参数3：connections 连线（可忽略）
+                参数4：关节样式（可忽略）
+                参数5：连线样式（可忽略）
+                '''
+                mp.solutions.drawing_utils.\
+                    draw_landmarks(img, handlms,
+                                   mp.solutions.hands.HAND_CONNECTIONS,
+                                   mp.solutions.drawing_styles.get_default_hand_landmarks_style(),
+                                   mp.solutions.drawing_styles.get_default_hand_connections_style())
+
+        return img
+
+    def find_positions(self, img):
+        '''
+        :param img: 图片
+        :param hand_no: 手编号（默认第0只手）
+        :return: 手势数据列表
+        '''
+        self.handslst = []
+        if self.results.multi_hand_landmarks:
+            '''
+            注意hand.landmark的返回值
+            因为最多允许检测两只手，因此返回的是一个三维数组
+                第一个纬度：手
+                第二维度：关节
+                第三维度：
+                    x：相对于屏幕左上角的水平距离
+                    y：相对于屏幕左上角的竖直距离
+                    z：相对于掌根的距离
+            '''
+            # landmarks得到的是关节点在图片中的比例位置，乘上图片的实际尺寸才是真实坐标
+            hands = self.results.multi_hand_landmarks
+            # 循环每只手
+            for hand in hands:
+                lmslist = []
+                # 循环每个关节
+                for idx, lm in enumerate(hand.landmark):
+                    h, w, _ = img.shape
+                    # 获取具体坐标
+                    cx, cy = int(lm.x * w), int(lm.y * h)
+                    lmslist.append([idx, cx, cy])
+                self.handslst.append(lmslist)
+
+        return self.handslst
+```
+
+<br>
+
+#### Number
+
+根据手势数据判断手势
+
+```python
+import cv2 as cv
+import numpy as np
+from handDetector import HandDetector
+
+
+# 打开摄像头
+def main():
+    nums = 0
+    # 参数为0时表示打开内置摄像头
+    cap = cv.VideoCapture(0)
+    # 创建手势识别对象
+    detector = HandDetector()
+    # 手指头列表
+    tip_idx = [4, 8, 12, 16, 20]
+    # 手势图片路径
+    fingersImgPath = [f'./data/fingers/{i}.png' for i in range(6)]
+    # 手势图片导入
+    fingersImgLst = [cv.imread(i) for i in fingersImgPath]
+
+    while True:
+        # 因为打开的是摄像头所以第一个参数永远为True
+        _, img = cap.read()
+
+        # 因为摄像头是镜像所以需要反转画面
+        img = cv.flip(img, 1)
+
+        # 绘制手势
+        img = detector.find_hands(img)
+
+        # 获取手势数据
+        handslst = detector.find_positions(img)
+        if len(handslst):
+            for i, hand in enumerate(handslst):
+                # 在指尖描绘圆点
+                fingers = []
+                '''
+                ！！！特别注意！！！
+                掌心面向屏幕，掌背面向自己区分左右手
+
+                大拇指要特殊处理
+                根据 大拇指指尖4 和 大拇指指尖下的关节3 的水平位置进行判断是否打开
+                但是因为是水平位置判断需要区分左右
+                左右手的判断根据 食指掌根5 和 中指掌根9 位置进行判断
+                '''
+                # 判断左右手，1为左手0为右手
+                direction = 1 if hand[5][1] > hand[9][1] else 0
+                for tip in tip_idx:
+                    # 获取每个指尖的位置并画圆
+                    x, y = hand[tip][1], hand[tip][2]
+                    cv.circle(img, (x, y), 20, (0, 255, 0), 2)
+
+                    # 判断每个指头是否打开
+                    # 大拇指
+                    if tip == 4:
+                        # 左手
+                        if direction:
+                            if hand[tip][1] > hand[tip - 1][1]:
+                                # 大拇指打开
+                                fingers.append(1)
+                            else:
+                                # 大拇指关上
+                                fingers.append(0)
+                        # 右手
+                        else:
+                            if hand[tip][1] < hand[tip - 1][1]:
+                                # 大拇指打开
+                                fingers.append(1)
+                            else:
+                                # 大拇指关上
+                                fingers.append(0)
+                        continue
+                    # 其他手指
+                    if hand[tip][2] < hand[tip - 2][2]:
+                        # 打开
+                        fingers.append(1)
+                    else:
+                        # 关上
+                        fingers.append(0)
+
+                fingerImg = fingersImgLst[fingers.count(1)]
+                # 获得图片的高宽
+                h, w, _ = fingerImg.shape
+                if direction:
+                    # 将图片放置在屏幕左上角
+                    img[0:h, 0:w] = fingerImg
+                else:
+                    screen_h, screen_w, _ = img.shape
+                    # 将图片放在屏幕右上角
+                    img[0:h, screen_w - w:] = fingerImg
+
+        cv.imshow('Image', img)
+        key = cv.waitKey(1)
+        # 键盘输入q时退出
+        if key == ord('q'):
+            break
+        # 键盘输入s时保存
+        elif key == ord('s'):
+            nums += 1
+            cv.imwrite('./data/myHand_%d.jpg' % nums, img)
+
+    cap.release()
+    cv.destroyAllWindows()
+
+
+if __name__ == '__main__':
+    main()
+```
+
+<br>
+
+## Error
+
+- 报错信息：error: (-215:Assertion failed) !_src.empty() in function 'cvtColor'
+
+解决方法：路径含中文、路径出错、mac专有：受`.DS_store`影响
+
+- 报错信息：TypeError:create_int（）
+
+解决方法：函数参数不兼容，可能是参数输入错了也有可能是版本问题
