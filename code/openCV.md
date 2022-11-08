@@ -495,7 +495,7 @@ def main():
             综合上述两个条件才满足大拇指闭合！
             '''
             # 判断左右手，1为左手0为右手
-            direction = 1 if hand[5][1] > hand[9][1] else 0
+            direction = True if hand[5][1] > hand[9][1] else False
             for tip in tip_idx:
                 # 获取每个指尖的位置并画圆
                 x, y = hand[tip][1], hand[tip][2]
@@ -505,9 +505,9 @@ def main():
                 # 特判大拇指，需要区分左右手
                 if tip == 4:
                     if direction:
-                        fingers.append(0 if hand[tip][1] < hand[tip - 1][1] and hand[tip][2] > hand[tip + 1][2] else 1)
+                        fingers.append(0 if hand[tip][1] < hand[tip + 1][1] else 1)
                     else:
-                        fingers.append(0 if hand[tip][1] > hand[tip - 1][1] and hand[tip][2] > hand[tip + 1][2] else 1)
+                        fingers.append(0 if hand[tip][1] > hand[tip + 1][1] else 1)
                     continue
                 # 其他手指
                 fingers.append(1 if hand[tip][2] < hand[tip - 2][2] else 0)
