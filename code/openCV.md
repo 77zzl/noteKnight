@@ -50,7 +50,7 @@ cv.imwrite('img_new.jpg', img)
 
 ### 灰度图
 
-灰度图不影响识别人脸但是可以减少计算量
+灰度图不影响识别人脸但是可以减少计算量，这个`cv.cvtColor()`方法提供了多种图片格式的转换
 
 ```python
 gray = cv.cvtColor(img, cv.COLOR_BGR2GRAY)
@@ -454,10 +454,10 @@ import numpy as np
 from handDetector import HandDetector
 
 
-# 打开摄像头
 def main():
-    nums = 0
-    # 参数为0时表示打开内置摄像头
+    # 保存图片的个数
+    save_nums = 0
+    # 打开摄像头，参数为0时表示打开内置摄像头
     cap = cv.VideoCapture(0)
     # 创建手势识别对象
     detector = HandDetector()
@@ -480,64 +480,48 @@ def main():
 
         # 获取手势数据
         handslst = detector.find_positions(img)
-        if len(handslst):
-            for i, hand in enumerate(handslst):
-                # 在指尖描绘圆点
-                fingers = []
-                '''
-                ！！！特别注意！！！
-                掌心面向屏幕，掌背面向自己区分左右手
+        for i, hand in enumerate(handslst):
+            # 在指尖描绘圆点
+            fingers = []
+            '''
+            ！！！特别注意！！！
+            掌心面向屏幕，掌背面向自己区分左右手
+            左右手的判断根据: 食指掌根5 和 中指掌根9 位置进行判断
 
-                大拇指要特殊处理
-                根据 大拇指指尖4 和 大拇指指尖下的关节3 的水平位置进行判断是否打开
-                但是因为是水平位置判断需要区分左右
-                左右手的判断根据 食指掌根5 和 中指掌根9 位置进行判断
-                '''
-                # 判断左右手，1为左手0为右手
-                direction = 1 if hand[5][1] > hand[9][1] else 0
-                for tip in tip_idx:
-                    # 获取每个指尖的位置并画圆
-                    x, y = hand[tip][1], hand[tip][2]
-                    cv.circle(img, (x, y), 20, (0, 255, 0), 2)
+            大拇指要特殊处理
+            首先是根据左右手区别处理
+            根据 大拇指指尖4 和 大拇指指尖下的关节3 的水平位置进行判断
+            再根据 大拇指指尖4 和 食指指根5 的竖直距离进行判断
+            综合上述两个条件才满足大拇指闭合！
+            '''
+            # 判断左右手，1为左手0为右手
+            direction = 1 if hand[5][1] > hand[9][1] else 0
+            for tip in tip_idx:
+                # 获取每个指尖的位置并画圆
+                x, y = hand[tip][1], hand[tip][2]
+                cv.circle(img, (x, y), 20, (0, 255, 0), 2)
 
-                    # 判断每个指头是否打开
-                    # 大拇指
-                    if tip == 4:
-                        # 左手
-                        if direction:
-                            if hand[tip][1] > hand[tip - 1][1]:
-                                # 大拇指打开
-                                fingers.append(1)
-                            else:
-                                # 大拇指关上
-                                fingers.append(0)
-                        # 右手
-                        else:
-                            if hand[tip][1] < hand[tip - 1][1]:
-                                # 大拇指打开
-                                fingers.append(1)
-                            else:
-                                # 大拇指关上
-                                fingers.append(0)
-                        continue
-                    # 其他手指
-                    if hand[tip][2] < hand[tip - 2][2]:
-                        # 打开
-                        fingers.append(1)
+                # 判断每个指头是否打开
+                # 特判大拇指，需要区分左右手
+                if tip == 4:
+                    if direction:
+                        fingers.append(0 if hand[tip][1] < hand[tip - 1][1] and hand[tip][2] > hand[tip + 1][2] else 1)
                     else:
-                        # 关上
-                        fingers.append(0)
+                        fingers.append(0 if hand[tip][1] > hand[tip - 1][1] and hand[tip][2] > hand[tip + 1][2] else 1)
+                    continue
+                # 其他手指
+                fingers.append(1 if hand[tip][2] < hand[tip - 2][2] else 0)
 
-                fingerImg = fingersImgLst[fingers.count(1)]
-                # 获得图片的高宽
-                h, w, _ = fingerImg.shape
-                if direction:
-                    # 将图片放置在屏幕左上角
-                    img[0:h, 0:w] = fingerImg
-                else:
-                    screen_h, screen_w, _ = img.shape
-                    # 将图片放在屏幕右上角
-                    img[0:h, screen_w - w:] = fingerImg
+            # 获取手势显示图片
+            fingerImg = fingersImgLst[fingers.count(1)]
+            # 获得图片的高宽
+            h, w, _ = fingerImg.shape
+            # 根据左右手判断图片出现位置，左手左上角右手右上角
+            if direction:
+                img[0:h, 0:w] = fingerImg
+            else:
+                screen_h, screen_w, _ = img.shape
+                img[0:h, screen_w - w:] = fingerImg
 
         cv.imshow('Image', img)
         key = cv.waitKey(1)
@@ -546,8 +530,8 @@ def main():
             break
         # 键盘输入s时保存
         elif key == ord('s'):
-            nums += 1
-            cv.imwrite('./data/myHand_%d.jpg' % nums, img)
+            save_nums += 1
+            cv.imwrite('./data/myHand_%d.jpg' % save_nums, img)
 
     cap.release()
     cv.destroyAllWindows()
