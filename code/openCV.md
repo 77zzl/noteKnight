@@ -771,8 +771,8 @@ conda create -n name python=3.6
 # 查看所有虚拟环境
 conda info --envs
 
-# 使用目标环境
-activate name
+# 使用目标环境，注意要在(base)环境下
+conda activate crawla
 
 # 退出当前虚拟环境，注意只有先退出了当前环境才可以切换成别的环境
 conda deactivate
